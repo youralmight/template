@@ -1,4 +1,7 @@
+import pdb
 import os
+from typing import Any, Optional
+from lightning.pytorch.utilities.types import STEP_OUTPUT
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -32,9 +35,18 @@ class Decoder(nn.Module):
 class LitAutoEncoder(pl.LightningModule):
     def __init__(self, encoder, decoder):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["encoder", "decoder"])
         self.encoder = encoder
         self.decoder = decoder
+
+    def on_train_start(self) -> None:
+        return super().on_train_start()
+
+    def on_train_epoch_start(self) -> None:
+        return super().on_train_epoch_start()
+
+    def on_train_batch_start(self, batch: Any, batch_idx: int) -> int | None:
+        return super().on_train_batch_start(batch, batch_idx)
 
     def training_step(self, batch, batch_idx):
         # training_step defines the train loop.
@@ -45,18 +57,19 @@ class LitAutoEncoder(pl.LightningModule):
         loss = F.mse_loss(x_hat, x)
         return loss
 
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-        return optimizer
+    def on_train_epoch_end(self) -> None:
+        return super().on_train_epoch_end()
 
-    def test_step(self, batch, batch_idx):
-        # this is the test loop
-        x, y = batch
-        x = x.view(x.size(0), -1)
-        z = self.encoder(x)
-        x_hat = self.decoder(z)
-        test_loss = F.mse_loss(x_hat, x)
-        self.log("test_loss", test_loss)
+    def on_train_end(self) -> None:
+        return super().on_train_end()
+
+    def on_validation_epoch_start(self) -> None:
+        return super().on_validation_epoch_start()
+
+    def on_validation_batch_start(
+        self, batch: Any, batch_idx: int, dataloader_idx: int = 0
+    ) -> None:
+        return super().on_validation_batch_start(batch, batch_idx, dataloader_idx)
 
     def validation_step(self, batch, batch_idx):
         # this is the validation loop
@@ -67,10 +80,55 @@ class LitAutoEncoder(pl.LightningModule):
         val_loss = F.mse_loss(x_hat, x)
         self.log("val_loss", val_loss)
 
+    def on_validation_batch_end(
+        self,
+        outputs: STEP_OUTPUT | None,
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> None:
+        return super().on_validation_batch_end(
+            outputs, batch, batch_idx, dataloader_idx
+        )
+
+    def on_validation_epoch_end(self) -> None:
+        # do something with the outputs of all validation steps
+        # e.g. calculate mean of all losses
+        # pdb.set_trace()
+        mean_loss = torch.stack(self.val_loss).mean()
+        self.log("val_loss", mean_loss)
+
+    def test_step(self, batch, batch_idx):
+        # this is the test loop
+        x, y = batch
+        x = x.view(x.size(0), -1)
+        z = self.encoder(x)
+        x_hat = self.decoder(z)
+        test_loss = F.mse_loss(x_hat, x)
+        self.log("test_loss", test_loss)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        return optimizer
+
     def any_lightning_module_function_or_hook(self):
         tensorboard_logger = self.logger.experiment
         fake_images = torch.Tensor(32, 3, 28, 28)
         tensorboard_logger.add_image("generated_images", fake_images, 0)
+
+
+class CIFAR10Classifier(pl.LightningModule):
+    def __init__(self):
+        # init the pretrained LightningModule
+        self.feature_extractor = LitAutoEncoder.load_from_checkpoint("PATH")
+        self.feature_extractor.freeze()
+
+        # the autoencoder outputs a 100-dim representation and CIFAR-10 has 10 classes
+        self.classifier = nn.Linear(100, 10)
+
+    def forward(self, x):
+        representations = self.feature_extractor(x)
+        x = self.classifier(representations)
 
 
 # model
@@ -90,6 +148,7 @@ autoencoder = (
 # trainer = pl.Trainer()
 # trainer.test(model=autoencoder, test_dataloaders=dataset.test_loader)
 
+
 # train with both splits
 class MyEarlyStopping(EarlyStopping):
     def on_validation_end(self, trainer, pl_module):
@@ -103,20 +162,25 @@ class MyEarlyStopping(EarlyStopping):
 
 # there are rich callbacks in pytorch lightning, check the docs for more
 early_stop_callback = EarlyStopping(
-    monitor="val_accuracy", min_delta=0.10, patience=3, verbose=False, mode="max"
+    monitor="val_loss", min_delta=0.10, patience=3, verbose=False, mode="min"
 )
-early_stop_callback_mine = MyEarlyStopping(
-    monitor="val_accuracy", min_delta=0.10, patience=3, verbose=False, mode="max"
-)
+# early_stop_callback_mine = MyEarlyStopping(
+# monitor="val_accuracy", min_delta=0.10, patience=3, verbose=False, mode="max"
+# )
 
 
-tensorboard = pl_loggers.TensorBoardLogger(save_dir="tb_logs")
+tensorboard = pl_loggers.TensorBoardLogger(save_dir="exps")
 # check lightning docs for more loggers like wandb, comet, neptune, mlflow
 
 trainer = pl.Trainer(
     default_root_dir="exps",
     callbacks=[early_stop_callback],
     logger=[tensorboard] if True else ["logger_0", "logger_1", "logger_2"],
+    fast_dev_run=False,
+    limit_train_batches=0.1,
+    limit_val_batches=0.01,
+    num_sanity_val_steps=2,
+    max_epochs=-1,
 )
 
 trainer.fit(
