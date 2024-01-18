@@ -65,6 +65,7 @@ class LitAutoEncoder(pl.LightningModule):
         return super().on_train_end()
 
     def on_validation_epoch_start(self) -> None:
+        self.epoch_batch_loss_list=[]
         return super().on_validation_epoch_start()
 
     def on_validation_batch_start(
@@ -79,7 +80,8 @@ class LitAutoEncoder(pl.LightningModule):
         z = self.encoder(x)
         x_hat = self.decoder(z)
         val_loss = F.mse_loss(x_hat, x)
-        self.log("val_loss", val_loss)
+        self.log("batch_val_loss", val_loss)
+        self.epoch_batch_loss_list.append(val_loss)
 
     def on_validation_batch_end(
         self,
@@ -96,8 +98,9 @@ class LitAutoEncoder(pl.LightningModule):
         # do something with the outputs of all validation steps
         # e.g. calculate mean of all losses
         # pdb.set_trace()
-        mean_loss = torch.stack(self.val_loss).mean()
+        mean_loss = torch.stack(self.epoch_batch_loss_list).mean()
         self.log("val_loss", mean_loss)
+        del self.epoch_batch_loss_list
 
     def test_step(self, batch, batch_idx):
         # this is the test loop

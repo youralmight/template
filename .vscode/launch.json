@@ -7,6 +7,17 @@
 			"program": "${file}",
 			"console": "integratedTerminal",
 			"justMyCode": true
+		},
+		{
+			"name": "trainer.py",
+			"type": "python",
+			"request": "launch",
+			"program": "src/main/trainer.py",
+			"console": "integratedTerminal",
+			"justMyCode": true,
+			"env": {
+				"CUDA_VISIBLE_DEVICES": "7"
+			}
 		}
 	]
 }

@@ -119,15 +119,47 @@ valid_loader = DataLoader(
     persistent_workers=False,
 )
 
+test_loader = DataLoader(
+    test_set,
+    batch_size=1,
+    shuffle=False,
+    sampler=None,
+    batch_sampler=None,
+    num_workers=min(os.cpu_count(),8),
+    collate_fn=None,
+    pin_memory=False,
+    drop_last=False,
+    timeout=0,
+    worker_init_fn=None,
+    multiprocessing_context=None,
+    generator=None,
+    prefetch_factor=2,
+    persistent_workers=False,
+)
 
+############################### others
+early_stop_callback = EarlyStopping(
+    monitor="val_loss", min_delta=0.10, patience=3, verbose=False, mode="min"
+)
 
-# check the checkpoint by myself
-
+tensorboard = pl_loggers.TensorBoardLogger(save_dir="exps")
+trainer = pl.Trainer(
+    default_root_dir="exps",
+    callbacks=[early_stop_callback],
+    logger=[tensorboard] if True else ["logger_0", "logger_1", "logger_2"],
+    fast_dev_run=False,
+    limit_train_batches=0.1,
+    limit_val_batches=0.01,
+    num_sanity_val_steps=2,
+    max_epochs=-1,
+)
+    
 
 # train model
-trainer = pl.Trainer()
-trainer.fit(model=autoencoder, train_dataloaders=dataset.train_loader)
+# trainer = pl.Trainer()
+trainer.fit(model=autoencoder, train_dataloaders=train_loader, val_dataloaders=valid_loader)
 # test the model
 trainer = pl.Trainer()
-trainer.test(model=autoencoder, test_dataloaders=dataset.test_loader)
+trainer.test(model=autoencoder, dataloaders=test_loader)
+
 
