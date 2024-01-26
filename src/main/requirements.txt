@@ -36,5 +36,7 @@ pylint
 
 torch<=1.12.1
 lightning
+# lightning[pytorch-extra]
+jsonargparse[signatures]
 torchvision
 tensorboard

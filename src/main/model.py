@@ -34,11 +34,12 @@ class Decoder(nn.Module):
 
 
 class LitAutoEncoder(pl.LightningModule):
-    def __init__(self, encoder, decoder):
+    def __init__(self,fake_argument):
         super().__init__()
-        self.save_hyperparameters(ignore=["encoder", "decoder"])
-        self.encoder = encoder
-        self.decoder = decoder
+        # self.save_hyperparameters(ignore=["encoder", "decoder"])
+        self.encoder = Encoder()
+        self.decoder = Decoder()
+        self.fake_argument=fake_argument
 
     def on_train_start(self) -> None:
         return super().on_train_start()
@@ -121,17 +122,6 @@ class LitAutoEncoder(pl.LightningModule):
         tensorboard_logger.add_image("generated_images", fake_images, 0)
 
 
-class CIFAR10Classifier(pl.LightningModule):
-    def __init__(self):
-        # init the pretrained LightningModule
-        self.feature_extractor = LitAutoEncoder.load_from_checkpoint(cls=LitAutoEncoder, checkpoint_path="PATH")
-        self.feature_extractor.freeze()
 
-        # the autoencoder outputs a 100-dim representation and CIFAR-10 has 10 classes
-        self.classifier = nn.Linear(100, 10)
-
-    def forward(self, x):
-        representations = self.feature_extractor(x)
-        x = self.classifier(representations)
 
 
